@@ -12,6 +12,7 @@ import os
 import inspect
 import unittest
 import logging
+from argparse import ArgumentParser
 
 import nagiosplugin
 from slack_logging_handler.handler import SlackHandler
@@ -113,33 +114,77 @@ def nagios_script(unittestcase_class, slack_webhook_url=None,
                   slack_channel=None, slack_user=None):
     '''Top-level function for script'''
 
+    # All the possible test names which can be invoked from the unittest
+    # TestCase
+    test_names = ['{}.{}'.format(unittestcase_class.__name__, name_)
+                      for name_ in dir(unittestcase_class)
+                      if name_.startswith('test')]
+
+    test_names_displ = '[' + '] ['.join(test_names) + ']'
+
+    options = '[-h] [-s] [-c] [-u] {}'.format(test_names_displ)
+    description = (
+        'Nagios/Icinga wrapper script to {} unit tests.  Specify one or more '
+        'of the unit test names to run or none to run all'
+    ).format(unittestcase_class.__name__)
+
+    parser = ArgumentParser(usage='%(prog)s ' + options,
+                            description=description)
+
+    slack_webhook_url_help_txt = ("Set webhook URL to log output to a Slack "
+                                  "channel.")
+    if slack_webhook_url:
+        slack_webhook_url_help_txt += '  Defaults to "{}"'.format(
+                                                            slack_webhook_url)
+
+    parser.add_argument("-s", "--slack-webhook-url",
+                        dest="slack_webhook_url", default=None,
+                        metavar="<slack webhook URL>",
+                        help=slack_webhook_url_help_txt)
+
+    slack_channel_help_txt = "Destination Slack channel."
+    if slack_channel:
+        slack_channel_help_txt += '  Defaults to "{}"'.format(slack_channel)
+
+    parser.add_argument("-c", "--slack-channel", dest="slack_channel",
+                        default=slack_channel, metavar="<slack channel>",
+                        help=slack_channel_help_txt)
+
+    slack_user_help_txt = "Slack user for submitting logging info."
+    if slack_channel:
+        slack_user_help_txt += '  Defaults to "{}"'.format(slack_user)
+
+    parser.add_argument("-u", "--slack-user", dest="slack_user",
+                        default=slack_user, metavar="<slack username>",
+                        help=slack_user_help_txt)
+
+    parsed_args, selected_test_names = parser.parse_known_args()
+
+    # Command line arguments take precedence over any passed through function
+    # inputs
+    if parsed_args.slack_webhook_url is not None:
+        slack_webhook_url = parsed_args.slack_webhook_url
+
+    if parsed_args.slack_channel is not None:
+        slack_channel = parsed_args.slack_channel
+
+    if parsed_args.slack_user is not None:
+        slack_user = parsed_args.slack_user
+
     if slack_webhook_url is not None:
         log.addHandler(SlackHandler(slack_webhook_url,
                                     channel=slack_channel,
-                                    username=slack_user))
-
-    if '-h' in sys.argv:
-        prog_name = os.path.basename(sys.argv[0])
-
-        test_names = ['{}.{}'.format(unittestcase_class.__name__, name_)
-                          for name_ in dir(unittestcase_class)
-                          if name_.startswith('test')]
-        test_names_displ = '-h|{}|'.format(unittestcase_class.__name__) + \
-                            '|'.join(test_names)
-        raise SystemExit('Usage: {} <{}>{}'.format(prog_name,
-                                                   test_names_displ,
-                                                   os.linesep))
-
-    elif len(sys.argv) > 1:
-        test_names = sys.argv[1:]
-    else:
-        # If no explicit test names are set, pass the unit test class name -
-        # This will cause all tests to be executed.
-        test_names = [unittestcase_class.__name__]
+                                    username=slack_user,
+                                    level=logging.WARN))
 
     unittest_module_name = inspect.getmodule(unittestcase_class)
 
-    nagios_resource = UnittestCaseResource(test_names)
+    # If no tests are selected, default to run all by setting the unittest
+    # TestCase class name
+    if len(selected_test_names) == 0:
+        selected_test_names = [unittestcase_class.__name__]
+
+    nagios_resource = UnittestCaseResource(selected_test_names)
     nagios_context = UnittestCaseContext('UnittestCaseContext',
                                     unittest_module_name=unittest_module_name)
 
