@@ -25,17 +25,17 @@ class UnittestCaseContext(nagiosplugin.context.Context):
 
     def __init__(self, *args, **kwargs):
         '''Overload in order to obtain module name for unittests'''
-        self._unittest_module_name = kwargs.pop('unittest_module_name', None)
+        self._unittest_module = kwargs.pop('unittest_module', None)
         super(UnittestCaseContext, self).__init__(*args, **kwargs)
 
     def evaluate(self, metric, resource):
-        '''Run tests from CSW unittest case'''
+        '''Run tests from input unittest case'''
         # The test may be an individual one or a whole test case.  For the
         # latter, this may involve multiple tests
         test_name = metric[0]
 
         tests = unittest.defaultTestLoader.loadTestsFromName(test_name,
-                                            module=self._unittest_module_name)
+                                            module=self._unittest_module)
 
         result = unittest.TestResult()
         tests.run(result)
@@ -110,8 +110,8 @@ class UnittestCaseResultsSummary(nagiosplugin.Summary):
 
 
 @nagiosplugin.guarded
-def nagios_script(unittestcase_class, slack_webhook_url=None,
-                  slack_channel=None, slack_user=None):
+def nagios_script(unittestcase_class, unittest_module=None, check_name=None,
+                  slack_webhook_url=None, slack_channel=None, slack_user=None):
     '''Top-level function for script'''
 
     # All the possible test names which can be invoked from the unittest
@@ -177,7 +177,8 @@ def nagios_script(unittestcase_class, slack_webhook_url=None,
                                     username=slack_user,
                                     level=logging.WARN))
 
-    unittest_module_name = inspect.getmodule(unittestcase_class)
+    if unittest_module is None:
+        unittest_module = inspect.getmodule(unittestcase_class)
 
     # If no tests are selected, default to run all by setting the unittest
     # TestCase class name
@@ -186,11 +187,15 @@ def nagios_script(unittestcase_class, slack_webhook_url=None,
 
     nagios_resource = UnittestCaseResource(selected_test_names)
     nagios_context = UnittestCaseContext('UnittestCaseContext',
-                                    unittest_module_name=unittest_module_name)
+                                         unittest_module=unittest_module)
 
     nagios_results_summary = UnittestCaseResultsSummary()
     check = nagiosplugin.Check(nagios_resource, nagios_context,
                                nagios_results_summary)
 
-    check.name = unittestcase_class.__name__
+    if check_name:
+        check.name = check_name
+    else:
+        check.name = unittestcase_class.__name__
+
     check.main()
