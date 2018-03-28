@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Classes to wrap unittest test case as a Nagios script
 """
+from unittest.loader import defaultTestLoader
 __author__ = "P J Kershaw"
 __date__ = "21/11/17"
 __copyright__ = "(C) 2017 Science and Technology Facilities Council"
@@ -25,7 +26,7 @@ class UnittestCaseContext(nagiosplugin.context.Context):
 
     def __init__(self, *args, **kwargs):
         '''Overload in order to obtain module name for unittests'''
-        self._unittest_module = kwargs.pop('unittest_module', None)
+        self._unittestcase_class = kwargs.pop('unittestcase_class', None)
         super(UnittestCaseContext, self).__init__(*args, **kwargs)
 
     def evaluate(self, metric, resource):
@@ -34,11 +35,11 @@ class UnittestCaseContext(nagiosplugin.context.Context):
         # latter, this may involve multiple tests
         test_name = metric[0]
 
-        tests = unittest.defaultTestLoader.loadTestsFromName(test_name,
-                                            module=self._unittest_module)
-
+        tests = unittest,defaultTestLoader.loadTestsFromTestCase(
+                                                    self._unittestcase_class)
+        
         result = unittest.TestResult()
-        tests.run(result)
+        tests[1].run(result)
         n_failures = len(result.failures)
         n_errors = len(result.errors)
         n_problems = n_failures + n_errors
@@ -110,8 +111,8 @@ class UnittestCaseResultsSummary(nagiosplugin.Summary):
 
 
 @nagiosplugin.guarded
-def nagios_script(unittestcase_class, unittest_module=None, check_name=None,
-                  slack_webhook_url=None, slack_channel=None, slack_user=None):
+def nagios_script(unittestcase_class, check_name=None, slack_webhook_url=None,
+                  slack_channel=None, slack_user=None):
     '''Top-level function for script'''
 
     # All the possible test names which can be invoked from the unittest
@@ -177,9 +178,6 @@ def nagios_script(unittestcase_class, unittest_module=None, check_name=None,
                                     username=slack_user,
                                     level=logging.WARN))
 
-    if unittest_module is None:
-        unittest_module = inspect.getmodule(unittestcase_class)
-
     # If no tests are selected, default to run all by setting the unittest
     # TestCase class name
     if len(selected_test_names) == 0:
@@ -187,7 +185,7 @@ def nagios_script(unittestcase_class, unittest_module=None, check_name=None,
 
     nagios_resource = UnittestCaseResource(selected_test_names)
     nagios_context = UnittestCaseContext('UnittestCaseContext',
-                                         unittest_module=unittest_module)
+                                    unittestcase_class=unittestcase_class)
 
     nagios_results_summary = UnittestCaseResultsSummary()
     check = nagiosplugin.Check(nagios_resource, nagios_context,
@@ -196,6 +194,6 @@ def nagios_script(unittestcase_class, unittest_module=None, check_name=None,
     if check_name:
         check.name = check_name
     else:
-        check.name = unittestcase_class.__name__
+         check.name = unittestcase_class.__name__
 
     check.main()
