@@ -20,6 +20,12 @@ from slack_logging_handler.handler import SlackHandler
 
 log = logging.getLogger('nagiosplugin')
 
+# There doesn't seem to be a way of getting this list through logging's public
+# interface - resorting to '_' 'protected' var
+LOG_LEVEL_NAMES = logging._nameToLevel.keys()
+LOG_LEVEL_NAMES_STR = ', '.join(LOG_LEVEL_NAMES)
+LOG_LEVEL_NAMES_OPT_STR = '|'.join(LOG_LEVEL_NAMES)
+
 
 class UnittestCaseContext(nagiosplugin.context.Context):
     '''Nagios Context - sets tests to run and executes them'''
@@ -62,15 +68,17 @@ class UnittestCaseContext(nagiosplugin.context.Context):
             elif n_failures:
                 hint += str(result.failures[0][0])
 
+            log.warning('{} failed'.format(self.describe(metric)))
+            
             # Log all the rest
             for error in result.errors:
                 log.error(error[0])
-                log.error(error[1])
+                log.error('', extra={'slack_exception_attachment':error[1]})
 
             # Log all the rest
             for failure in result.failures:
                 log.error(failure[0])
-                log.error(failure[1])
+                log.debug('', extra={'slack_exception_attachment':failure[1]})
         else:
             # Overall pass
             status = nagiosplugin.context.Ok
@@ -111,8 +119,9 @@ class UnittestCaseResultsSummary(nagiosplugin.Summary):
 
 
 @nagiosplugin.guarded
-def nagios_script(unittestcase_class, check_name=None, slack_webhook_url=None,
-                  slack_channel=None, slack_user=None):
+def nagios_script(unittestcase_class, check_name=None, log_level=logging.WARN,
+                  slack_webhook_url=None, slack_channel=None, 
+                  slack_user=None):
     '''Top-level function for script'''
 
     # All the possible test names which can be invoked from the unittest
@@ -138,6 +147,11 @@ def nagios_script(unittestcase_class, check_name=None, slack_webhook_url=None,
         slack_webhook_url_help_txt += '  Defaults to "{}"'.format(
                                                             slack_webhook_url)
 
+    parser.add_argument("-l", "--slack-log-level",
+                        dest="log_level", default=log_level,
+                        metavar="<{}>".format(LOG_LEVEL_NAMES_OPT_STR),
+                        help="Set the log-level for log messages to Slack.")
+    
     parser.add_argument("-s", "--slack-webhook-url",
                         dest="slack_webhook_url", default=None,
                         metavar="<slack webhook URL>",
@@ -173,27 +187,33 @@ def nagios_script(unittestcase_class, check_name=None, slack_webhook_url=None,
         slack_user = parsed_args.slack_user
 
     if slack_webhook_url is not None:
+        log_level = logging._nameToLevel.get(parsed_args.log_level)
+        if log_level is None:
+            parser.error('Unrecognised log-level.  Use one of, {}'.format(
+                ))
+            
         log.addHandler(SlackHandler(slack_webhook_url,
                                     channel=slack_channel,
                                     username=slack_user,
-                                    level=logging.WARN))
+                                    level=log_level))
 
     # If no tests are selected, default to run all by setting the unittest
     # TestCase class name
     if len(selected_test_names) == 0:
         selected_test_names = [unittestcase_class.__name__]
-
+        
+    if not check_name:
+         check_name = unittestcase_class.__name__
+         
     nagios_resource = UnittestCaseResource(selected_test_names)
-    nagios_context = UnittestCaseContext('UnittestCaseContext',
+    nagios_context = UnittestCaseContext(
+                                    'UnittestCaseContext',
+                                    fmt_metric=check_name,
                                     unittestcase_class=unittestcase_class)
 
     nagios_results_summary = UnittestCaseResultsSummary()
     check = nagiosplugin.Check(nagios_resource, nagios_context,
                                nagios_results_summary)
 
-    if check_name:
-        check.name = check_name
-    else:
-         check.name = unittestcase_class.__name__
-
+    check.name = check_name
     check.main()
