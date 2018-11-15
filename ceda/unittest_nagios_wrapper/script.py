@@ -62,23 +62,24 @@ class UnittestCaseContext(nagiosplugin.context.Context):
                 status = nagiosplugin.context.Warn
                 hint = 'Some tests failed: '
 
-            # Pass text for first error in the hint
-            if n_errors:
-                hint += str(result.errors[0][0])
-            elif n_failures:
-                hint += str(result.failures[0][0])
-
-            log.warning('{} failed'.format(self.describe(metric)))
+            log.critical('{} failed'.format(self.describe(metric)))
             
             # Log all the rest
+            hint_list = []
             for error in result.errors:
                 log.error(error[0])
-                log.error('', extra={'slack_exception_attachment':error[1]})
-
+                log.debug('', extra={'slack_exception_attachment':error[1]})
+                
+                hint_list.append(str(error[0]))
+                
             # Log all the rest
             for failure in result.failures:
                 log.error(failure[0])
                 log.debug('', extra={'slack_exception_attachment':failure[1]})
+                
+                hint_list.append(str(failure[0]))
+                
+            hint += ', '.join(hint_list)
         else:
             # Overall pass
             status = nagiosplugin.context.Ok
@@ -112,12 +113,19 @@ class UnittestCaseResultsSummary(nagiosplugin.Summary):
         return msg
 
     def problem(self, results):
-        msg = 'Problems with test: ' + ', '.join([result.hint
-                                                  for result in results])
+        msg = ', '.join([result.hint for result in results])
         log.info(msg)
         return msg
 
 
+class UnittestNagiosWrapperError(Exception):
+    '''Base class for unittest Nagios wrapper exceptions'''
+    
+    
+class UnittestNagiosWrapperConfigError(UnittestNagiosWrapperError):
+    '''Configuration error with unittest Nagios wrapper'''
+    
+    
 @nagiosplugin.guarded
 def nagios_script(unittestcase_class, check_name=None, log_level=logging.WARN,
                   slack_webhook_url=None, slack_channel=None, 
@@ -147,8 +155,21 @@ def nagios_script(unittestcase_class, check_name=None, log_level=logging.WARN,
         slack_webhook_url_help_txt += '  Defaults to "{}"'.format(
                                                             slack_webhook_url)
 
+    log_level_s = logging._levelToName.get(log_level)
+    if log_level is None:
+        raise UnittestNagiosWrapperConfigError(
+            'Unrecognised default log-level set.  Use one of: {}'.format(
+                LOG_LEVEL_NAMES_STR))
+                
+    parser.add_argument("-n", "--test-name",
+                        dest="check_name", default=unittestcase_class.__name__,
+                        metavar="<name of test>",
+                        help="Descriptive name of test - defaults to name of "
+                            "unittest class: '{}'.".format(
+                                unittestcase_class.__name__))
+                    
     parser.add_argument("-l", "--slack-log-level",
-                        dest="log_level", default=log_level,
+                        dest="log_level", default=log_level_s,
                         metavar="<{}>".format(LOG_LEVEL_NAMES_OPT_STR),
                         help="Set the log-level for log messages to Slack.")
     
@@ -189,8 +210,8 @@ def nagios_script(unittestcase_class, check_name=None, log_level=logging.WARN,
     if slack_webhook_url is not None:
         log_level = logging._nameToLevel.get(parsed_args.log_level)
         if log_level is None:
-            parser.error('Unrecognised log-level.  Use one of, {}'.format(
-                ))
+            parser.error('Unrecognised log-level.  Use one of: {}'.format(
+                LOG_LEVEL_NAMES_STR))
             
         log.addHandler(SlackHandler(slack_webhook_url,
                                     channel=slack_channel,
@@ -201,19 +222,17 @@ def nagios_script(unittestcase_class, check_name=None, log_level=logging.WARN,
     # TestCase class name
     if len(selected_test_names) == 0:
         selected_test_names = [unittestcase_class.__name__]
-        
-    if not check_name:
-         check_name = unittestcase_class.__name__
+
          
     nagios_resource = UnittestCaseResource(selected_test_names)
     nagios_context = UnittestCaseContext(
                                     'UnittestCaseContext',
-                                    fmt_metric=check_name,
+                                    fmt_metric=parsed_args.check_name,
                                     unittestcase_class=unittestcase_class)
 
     nagios_results_summary = UnittestCaseResultsSummary()
     check = nagiosplugin.Check(nagios_resource, nagios_context,
                                nagios_results_summary)
 
-    check.name = check_name
+    check.name = parsed_args.check_name
     check.main()
