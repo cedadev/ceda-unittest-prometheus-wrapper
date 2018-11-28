@@ -39,11 +39,12 @@ class UnittestCaseContext(nagiosplugin.context.Context):
         # latter, this may involve multiple tests
         test_name = metric[0]
 
-        tests = unittest,defaultTestLoader.loadTestsFromTestCase(
+        test_suite = unittest.defaultTestLoader.loadTestsFromTestCase(
                                                     self._unittestcase_class)
         
         result = unittest.TestResult()
-        tests[1].run(result)
+        test_suite.run(result)
+
         n_failures = len(result.failures)
         n_errors = len(result.errors)
         n_problems = n_failures + n_errors
