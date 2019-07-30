@@ -94,7 +94,7 @@ def main(log_level=logging.WARN, run_service=True):
     test_module = __import__(test_module_name, globals(), locals(), 
                              [test_class_name])
     test_class = getattr(test_module, test_class_name)
-    if not isinstance(test_class, unittest.TestCase):
+    if not isinstance(unittest.TestCase, test_class):
         parser.exit(status=1, message="Expecting unittest.TestCase instance "
                     "for <test case class> argument, got {!r}".format(
                         test_class))
