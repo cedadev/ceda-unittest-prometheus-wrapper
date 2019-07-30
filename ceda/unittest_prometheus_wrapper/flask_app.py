@@ -1,18 +1,26 @@
+"""Define Prometheus Flask application
+"""
+__author__ = "P J Kershaw"
+__date__ = "13/07/19"
+__copyright__ = "Copyright 2019 United Kingdom Research and Innovation"
+__license__ = """BSD - See LICENSE file in top-level directory"""
+__contact__ = "Philip.Kershaw@stfc.ac.uk"
+from enum import Enum
+
 from flask import Flask, Response
 import prometheus_client 
 
 from ceda.unittest_prometheus_wrapper.test_runner import TestCaseRunner
 
 
-from enum import Enum
-
-
 class ServiceStatus(Enum):
+    '''Define up/down status for service'''
     DOWN = 0
     UP = 1
         
     @classmethod  
     def names(cls):
+        '''Get a list of the service statuses'''
         return [i.name for i in ServiceStatus]
   
 

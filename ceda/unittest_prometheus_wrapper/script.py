@@ -32,10 +32,10 @@ class PrometheusScriptConfigError(Exception):
     '''
     
      
-def prometheus_script(log_level=logging.WARN):
+def main(log_level=logging.WARN, run_service=True):
     '''Run prometheus Flask app'''
 
-    options = '[-h] [-s] [-c] [-n]'
+    options = '[-h] [-s] [-c] [-n] [-p]'
     description = (
         'Prometheus Flask web app script to run unit tests.  Specify a '
         'unit test case class and optionally, one or more test methods to run'
@@ -77,12 +77,22 @@ def prometheus_script(log_level=logging.WARN):
                         help="List of test names from <test case class> to "
                             "run.  If none are given, all tests from the "
                             "test class will be run")
-
+                    
+    parser.add_argument("-p", "--port-num",
+                        dest="port_num", 
+                        metavar="<port number>",
+                        type=int,
+                        default=int(
+                            os.getenv('CEDA_PROMETHEUS_SERVICE_PORT', 5000)),
+                        help="Port number to run the web service on.  "
+                            "Defaults to 5000")
+    
     parsed_args, _ = parser.parse_known_args()
 
     test_module_name, test_class_name = parsed_args.test_class_name.rsplit(
                                                                     '.', 1)
-    test_module = __import__(test_module_name, globals(), locals(), [test_class_name])
+    test_module = __import__(test_module_name, globals(), locals(), 
+                             [test_class_name])
     test_class = getattr(test_module, test_class_name)
         
     if parsed_args.service_name is None:
@@ -93,9 +103,12 @@ def prometheus_script(log_level=logging.WARN):
     app = flask_app_factory(test_class, test_names=parsed_args.test_names,
                             service_name=service_name)
 
-    return app
+    if run_service:
+        app.run('127.0.0.1', parsed_args.port_num)
+    else:
+        return app
+
 
 if __name__ == '__main__':
-    app = prometheus_script()
-    app.run()
+    main()
     
