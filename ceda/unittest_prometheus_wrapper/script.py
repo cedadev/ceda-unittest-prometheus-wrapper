@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """Script to run Flask Prometheus app
 """
-from builtins import __import__
 __author__ = "P J Kershaw"
 __date__ = "13/07/19"
 __copyright__ = "Copyright 2019 United Kingdom Research and Innovation"
 __license__ = """BSD - See LICENSE file in top-level directory"""
 __contact__ = "Philip.Kershaw@stfc.ac.uk"
+from builtins import __import__
 import sys
 import os
 import inspect
@@ -94,7 +94,11 @@ def main(log_level=logging.WARN, run_service=True):
     test_module = __import__(test_module_name, globals(), locals(), 
                              [test_class_name])
     test_class = getattr(test_module, test_class_name)
-        
+    if not isinstance(test_class, unittest.TestCase):
+        parser.exit(status=1, message="Expecting unittest.TestCase instance "
+                    "for <test case class> argument, got {!r}".format(
+                        test_class))
+                    
     if parsed_args.service_name is None:
         service_name = test_class.__name__
     else:

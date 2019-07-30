@@ -19,7 +19,7 @@ except ImportError:
 
 setup(
     name =              'ceda-unittest-prometheus-wrapper',
-    version =           '0.1.0',
+    version =           '0.1.1',
     description =       'Prometheus wrapper for unittest test case',
     long_description =  '''Allows easy creation of a wrapper script to a unit
 test case so that it can act as a Prometheus target
