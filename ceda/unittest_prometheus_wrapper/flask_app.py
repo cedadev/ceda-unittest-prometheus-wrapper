@@ -59,11 +59,13 @@ def flask_app_factory(test_data_containers):
     '''
 
     app = Flask(__name__)
-    _service_status_enum = prometheus_client.Enum(service_name, 
+
+    for container in test_data_containers:
+        # Set up/down enum for each test class
+        _service_status_enum = prometheus_client.Enum(container.service_name, 
                                                'up/down status of service', 
                                                states=ServiceStatus.names())
 
-    for container in test_data_containers:
         # For each test create a view
         for test_name in container.test_names:
             flask_view = FlaskPrometheusView(_service_status_enum, test_class, 
