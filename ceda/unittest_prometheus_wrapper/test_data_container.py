@@ -5,7 +5,7 @@ class TestDataContainer:
     def __init__(self, test_class, test_names=None, service_name=None):
         self.test_class = test_class
 
-        if test_names = None:
+        if test_names is None:
             self.test_names = []
         else:
             self.test_names = test_names
