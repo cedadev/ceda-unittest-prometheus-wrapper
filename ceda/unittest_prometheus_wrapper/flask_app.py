@@ -68,20 +68,20 @@ def flask_app_factory(test_data_containers):
 
         # For each test create a view
         for test_name in container.test_names:
-            flask_view = FlaskPrometheusView(_service_status_enum, test_class, 
+            flask_view = FlaskPrometheusView(_service_status_enum, container.test_class, 
                                             test_name=test_name)
             
             # Path is made up of the test case class name and name of test 
             # method to be executed.
-            path = '/metrics/{}/{}'.format(test_class.__name__, test_name)
+            path = '/metrics/{}/{}'.format(container.test_class.__name__, test_name)
             app.add_url_rule(path, test_name, flask_view)
         else:
             # No test names set - instead run all the tests in the input test case
-            flask_view = FlaskPrometheusView(_service_status_enum, test_class)
+            flask_view = FlaskPrometheusView(_service_status_enum, container.test_class)
             
             # Path is made up of the test case class name and name of test 
             # method to be executed.
-            path = '/metrics/{}'.format(test_class.__name__)
-            app.add_url_rule(path, test_class.__name__, flask_view)        
+            path = '/metrics/{}'.format(container.test_class.__name__)
+            app.add_url_rule(path, container.test_class.__name__, flask_view)        
             
     return app
