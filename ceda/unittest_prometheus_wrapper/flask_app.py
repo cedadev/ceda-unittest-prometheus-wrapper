@@ -65,8 +65,10 @@ def flask_app_factory(test_data_containers):
         # Set up/down enum for each test class - one per container they each have separate
         # names - keep things separate if storing in a DB
         _service_status_enum = prometheus_client.Enum(container.service_name, 
-                                               'up/down status of service', 
-                                               states=ServiceStatus.names())
+                                                      'up/down status of service', 
+                                                      states=ServiceStatus.names(),
+                                                      registry=container.collector_registry
+                                                     )
 
         # For each test create a view
         for test_name in container.test_names:
