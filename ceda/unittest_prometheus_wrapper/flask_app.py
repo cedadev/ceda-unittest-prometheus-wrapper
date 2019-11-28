@@ -30,12 +30,13 @@ class FlaskPrometheusView:
     test to be executed.
     '''
     
-    def __init__(self, service_status, test_class, test_name=None):
+    def __init__(self, service_status, test_class, enum_registry, test_name=None):
         '''Initialise the test case runner from the test class and test
         name.  Also take a reference to the Prometheus Enum service status
         '''
         self._test_case = TestCaseRunner(test_class, test_name=test_name)
         self._service_status = service_status
+        self._enum_registry = enum_registry
               
     def __call__(self):
         '''Use call method to make instances of this class a callable 
@@ -47,7 +48,7 @@ class FlaskPrometheusView:
         # up/down enum status for Prometheus output
         self._service_status.state(ServiceStatus.names()[int(status)])
             
-        return Response(prometheus_client.generate_latest(), 
+        return Response(prometheus_client.generate_latest(registry=self._enum_registry), 
                         mimetype='text/plain; charset=utf-8')
 
 
@@ -61,7 +62,8 @@ def flask_app_factory(test_data_containers):
     app = Flask(__name__)
 
     for container in test_data_containers:
-        # Set up/down enum for each test class
+        # Set up/down enum for each test class - one per container they each have separate
+        # names - keep things separate if storing in a DB
         _service_status_enum = prometheus_client.Enum(container.service_name, 
                                                'up/down status of service', 
                                                states=ServiceStatus.names())
