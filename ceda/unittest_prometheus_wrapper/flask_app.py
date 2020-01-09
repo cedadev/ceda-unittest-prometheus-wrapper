@@ -12,6 +12,9 @@ import prometheus_client
 
 from ceda.unittest_prometheus_wrapper.test_runner import TestCaseRunner
 
+import logging
+logger = logging.getLogger('waitress')
+logger.setLevel(logging.INFO)
 
 class ServiceStatus(Enum):
     '''Define up/down status for service'''
@@ -37,7 +40,8 @@ class FlaskPrometheusView:
         self._test_case = TestCaseRunner(test_class, test_name=test_name)
         self._service_status = service_status
         self._enum_registry = enum_registry
-              
+
+
     def __call__(self):
         '''Use call method to make instances of this class a callable 
         function to which a Flask view can be attached
@@ -61,24 +65,29 @@ def flask_app_factory(test_data_containers):
 
     app = Flask(__name__)
 
+    logger.info('Created Flask app')
+    logger.info([i.test_class.__name__ for i in test_data_containers])
+
     for container in test_data_containers:
+        logger.info('Start of for loop')
         # Set up/down enum for each test class - one per container they each have separate
         # names - keep things separate if storing in a DB
         _service_status_enum = prometheus_client.Enum(container.service_name, 
                                                       'up/down status of service', 
                                                       states=ServiceStatus.names(),
-                                                      registry=container.collector_registry
-                                                     )
+                                                      registry=container.collector_registry)
 
-        # For each test create a view
-        for test_name in container.test_names:
-            flask_view = FlaskPrometheusView(_service_status_enum, container.test_class, 
-                                             container.collector_registry, test_name=test_name)
-            
-            # Path is made up of the test case class name and name of test 
-            # method to be executed.
-            path = '/metrics/{}/{}'.format(container.test_class.__name__, test_name)
-            app.add_url_rule(path, test_name, flask_view)
+        if container.test_names:
+            # For each test create a view
+            for test_name in container.test_names:
+                flask_view = FlaskPrometheusView(_service_status_enum, container.test_class, 
+                                                container.collector_registry, test_name=test_name)
+                
+                # Path is made up of the test case class name and name of test 
+                # method to be executed.
+                path = '/metrics/{}/{}'.format(container.test_class.__name__, test_name)
+                app.add_url_rule(path, test_name, flask_view)
+                logger.info('1 - Added url rule, path: {}'.format(path))
         else:
             # No test names set - instead run all the tests in the input test case
             flask_view = FlaskPrometheusView(_service_status_enum, container.test_class,
@@ -87,6 +96,7 @@ def flask_app_factory(test_data_containers):
             # Path is made up of the test case class name and name of test 
             # method to be executed.
             path = '/metrics/{}'.format(container.test_class.__name__)
-            app.add_url_rule(path, container.test_class.__name__, flask_view)        
+            app.add_url_rule(path, container.test_class.__name__, flask_view)
+            logger.info('2 - Added url rule, path: {}'.format(path))
             
     return app
